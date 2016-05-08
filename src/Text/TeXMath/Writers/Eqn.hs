@@ -38,21 +38,58 @@ import Control.Monad.Writer( MonadWriter, WriterT,
 writeEqn :: [Exp] -> String
 writeEqn = intercalate " " . map writeExp
 
+-- like writeExp but inserts {} if contents contain a space
+writeExp' :: Exp -> String
+writeExp' e = if ' ' `elem` s
+                 then "{" ++ s ++ "}"
+                 else s
+               where s = writeExp e
+
 writeExp :: Exp -> String
-writeExp (ENumber s) = undefined
-writeExp (EGrouped es) = undefined
-writeExp (EDelimited open close [Right (EArray aligns rows)]) = undefined
-writeExp (EDelimited open close es) =  undefined
-writeExp (EIdentifier s) = undefined
-writeExp o@(EMathOperator s) = undefined
+writeExp (ENumber s) = s
+writeExp (EGrouped es) = "{" ++ writeEqn es ++ "}"
+writeExp (EDelimited open close es) =
+  "left " ++ mbQuote open ++ " " ++ intercalate " " (map fromDelimited es) ++
+  " right " ++ mbQuote close
+  where fromDelimited (Left e)  = "\"" ++ e ++ "\""
+        fromDelimited (Right e) = writeExp e
+        mbQuote "" = "\"\""
+        mbQuote s  = s
+writeExp (EMathOperator s) =
+  if s `elem` ["sin", "cos", "tan", "sinh", "cosh",
+               "tanh", "arc", "max", "min", "lim",
+               "log", "ln", "exp"]
+     then s
+     else "\"" ++ s ++ "\""
 writeExp (ESymbol Ord [c])  -- do not render "invisible operators"
   | c `elem` ['\x2061'..'\x2064'] = "" -- see 3.2.5.5 of mathml spec
-writeExp (ESymbol t s) = undefined
-writeExp (ESpace width) = undefined
-writeExp (EFraction fractype e1 e2) = undefined
-writeExp (ESub b e1) = undefined
-writeExp (ESuper b e1) = undefined
-writeExp (ESubsup b e1 e2) = undefined
+writeExp (EIdentifier s) = writeExp (ESymbol Ord s)
+writeExp (ESymbol t s) =
+  case s of
+    "\8805"       -> ">="
+    "\8804"       -> "<="
+    "\8801"       -> "=="
+    "\8800"       -> "!="
+    "\177"        -> "+-"
+    "\8594"       -> "->"
+    "\8592"       -> "<-"
+    -- TODO remaining symbols
+    "\945"        -> "alpha"
+    -- TODO remaining greek letters
+    -- TODO catch-all for raw unicode
+    otherwise -> undefined
+writeExp (ESpace width) =
+  let halfs = floor $ width * 9
+  in  replicate (halfs `div` 2) '~' ++ replicate (halfs `mod` 2) '^'
+writeExp (EFraction _ (ENumber "1") (ENumber "2")) = "half"
+writeExp (EFraction fractype e1 e2) = writeExp' e1 ++ op ++ writeExp' e2
+  where op = if fractype == NoLineFrac
+                then " / "
+                else " over "
+writeExp (ESub b e1) = writeExp' b ++ " sub " ++ writeExp' e1
+writeExp (ESuper b e1) = writeExp' b ++ " sup " ++ writeExp' e1
+writeExp (ESubsup b e1 e2) =
+  writeExp' b ++ " sub " ++ writeExp' e1 ++ " sup " ++ writeExp' e2
 writeExp (EOver convertible b e1) = undefined
 writeExp (EUnder convertible b e1) = undefined
 writeExp (EUnderover convertible b e1@(ESymbol Accent _) e2) =
@@ -61,7 +98,7 @@ writeExp (EUnderover convertible b e1 e2@(ESymbol Accent _)) =
  writeExp (EOver convertible (EUnder False b e1) e2)
 writeExp (EUnderover convertible b e1 e2)
   = writeExp (EUnder convertible (EOver convertible b e2) e1)
-writeExp (ESqrt e) = undefined
+writeExp (ESqrt e) = "sqrt " ++ writeExp' e
 writeExp (ERoot i e) = undefined
 writeExp (EPhantom e) = undefined
 writeExp (EBoxed e) = undefined
