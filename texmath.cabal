@@ -99,6 +99,7 @@ Library
                          Text.TeXMath.Writers.OMML,
                          Text.TeXMath.Writers.Pandoc,
                          Text.TeXMath.Writers.TeX,
+                         Text.TeXMath.Writers.Eqn,
                          Text.TeXMath.Unicode.ToUnicode,
                          Text.TeXMath.Unicode.ToTeX,
                          Text.TeXMath.Unicode.ToASCII
