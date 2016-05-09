@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 module Text.TeXMath.Writers.Eqn (writeEqn) where
 
 import Data.List (intercalate)
+import Data.Char (isAscii, ord)
+import Text.Printf (printf)
 import Text.TeXMath.Types
 import Text.TeXMath.Unicode.ToUnicode (fromUnicode)
 import qualified Text.TeXMath.Shared as S
@@ -30,6 +32,8 @@ import Control.Monad (when, unless, foldM_)
 import Control.Monad.Reader (MonadReader, runReader, Reader, asks, local)
 import Control.Monad.Writer( MonadWriter, WriterT,
                              execWriterT, tell, censor)
+import Data.Ratio ((%))
+
 -- import Debug.Trace
 -- tr' x = trace (show x) x
 
@@ -66,22 +70,76 @@ writeExp (ESymbol Ord [c])  -- do not render "invisible operators"
 writeExp (EIdentifier s) = writeExp (ESymbol Ord s)
 writeExp (ESymbol t s) =
   case s of
-    "\8805"       -> ">="
-    "\8804"       -> "<="
-    "\8801"       -> "=="
-    "\8800"       -> "!="
-    "\177"        -> "+-"
-    "\8594"       -> "->"
-    "\8592"       -> "<-"
-    -- TODO remaining symbols
-    "\945"        -> "alpha"
-    -- TODO remaining greek letters
-    -- TODO catch-all for raw unicode
-    otherwise -> undefined
+    "\8805" -> ">="
+    "\8804" -> "<="
+    "\8801" -> "=="
+    "\8800" -> "!="
+    "\177"  -> "+-"
+    "\8594" -> "->"
+    "\8592" -> "<-"
+    "\8810" -> "<<"
+    "\8811" -> ">>"
+    "\8734" -> "inf"
+    "\8706" -> "partial"
+    "\189"  -> "half"
+    "\8242" -> "prime"
+    "\8776" -> "approx"
+    "\183"  -> "cdot"
+    "\215"  -> "times"
+    "\8711" -> "grad"
+    "\8230" -> "..."
+    "\8721" -> "sum"
+    "\8747" -> "int"
+    "\8719" -> "prod"
+    "\8898" -> "union"
+    "\8899" -> "inter"
+    "\945" -> "alpha"
+    "\946" -> "beta"
+    "\967" -> "chi"
+    "\948" -> "delta"
+    "\916" -> "DELTA"
+    "\1013" -> "epsilon"
+    "\951" -> "eta"
+    "\947" -> "gamma"
+    "\915" -> "GAMMA"
+    "\953" -> "iota"
+    "\954" -> "kappa"
+    "\955" -> "lambda"
+    "\923" -> "LAMBDA"
+    "\956" -> "mu"
+    "\957" -> "nu"
+    "\969" -> "omega"
+    "\937" -> "OMEGA"
+    "\981" -> "phi"
+    "\966" -> "varphi"
+    "\934" -> "PHI"
+    "\960" -> "pi"
+    "\928" -> "PI"
+    "\968" -> "psi"
+    "\936" -> "PSI"
+    "\961" -> "rho"
+    "\963" -> "sigma"
+    "\931" -> "SIGMA"
+    "\964" -> "tau"
+    "\952" -> "theta"
+    "\920" -> "THETA"
+    "\965" -> "upsilon"
+    "\933" -> "UPSILON"
+    "\958" -> "xi"
+    "\926" -> "XI"
+    "\950" -> "zeta"
+    _ | all isAscii s -> s
+    otherwise -> "\\[" ++ intercalate " " (map toUchar s) ++ "]"
+  where toUchar c = printf "u%04x" (ord c)
+writeExp (ESpace d) =
+  case d of
+      _ | d > 0 && d < (2 % 9) -> "^"
+        | d >= (2 % 9) && d < (3 % 9) -> "~"
+        | d < 0     -> "back " ++ show (floor $ -1 * d * 100)
+        | otherwise -> "fwd " ++ show (floor $ d * 100)
 writeExp (ESpace width) =
   let halfs = floor $ width * 9
   in  replicate (halfs `div` 2) '~' ++ replicate (halfs `mod` 2) '^'
-writeExp (EFraction _ (ENumber "1") (ENumber "2")) = "half"
 writeExp (EFraction fractype e1 e2) = writeExp' e1 ++ op ++ writeExp' e2
   where op = if fractype == NoLineFrac
                 then " / "
@@ -103,8 +161,22 @@ writeExp (ERoot i e) = undefined
 writeExp (EPhantom e) = undefined
 writeExp (EBoxed e) = undefined
 writeExp (EScaled size e) = undefined
-writeExp (EText ttype s) = undefined
-writeExp (EStyled ttype es) = undefined
+writeExp (EText ttype s) =
+  let quoted = "\"" ++ s ++ "\""
+  in case ttype of
+       TextNormal -> "roman " ++ quoted
+       TextItalic -> quoted
+       TextBold   -> "bold " ++ quoted
+       TextBoldItalic -> "bold italic " ++ quoted
+       _   -> quoted
+writeExp (EStyled ttype es) =
+  let contents = "{" ++ writeEqn es ++ "}"
+  in case ttype of
+       TextNormal -> "roman " ++ contents
+       TextItalic -> "italic " ++ contents
+       TextBold   -> "bold " ++ contents
+       TextBoldItalic -> "bold italic " ++ contents
+       _   -> contents
 writeExp (EArray [AlignRight, AlignLeft] rows) = undefined
 writeExp (EArray aligns rows) = undefined
 
